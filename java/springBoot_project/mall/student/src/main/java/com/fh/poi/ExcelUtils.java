@@ -100,8 +100,6 @@ public class ExcelUtils {
                 style.setBorderRight(BorderStyle.THIN);
                 style.setBorderTop(BorderStyle.THIN);
                 cell.setCellStyle(style);
-
-                System.out.println();
                 //数据准被好了
 
 
