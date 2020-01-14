@@ -1,29 +1,34 @@
 package com.fh.model;
 
 import com.baomidou.mybatisplus.annotation.IdType;
+import com.baomidou.mybatisplus.annotation.TableField;
 import com.baomidou.mybatisplus.annotation.TableId;
 import com.baomidou.mybatisplus.annotation.TableName;
-import com.fh.poi.ExcelAnnotation;
+import com.fh.poi.ExcelFild;
+import com.fh.poi.ExcleHeard;
 import org.springframework.format.annotation.DateTimeFormat;
 
 import java.util.Date;
 
 @TableName("t_student")
+@ExcleHeard(title = "学生信息")
 public class Student{
   @TableId(value = "id",type = IdType.AUTO)
-  @ExcelAnnotation(headName="学号",order=0)
+  @ExcelFild(Field = "主键")
     private Integer id;
-  @ExcelAnnotation(headName="姓名",order=1)
+  @ExcelFild(Field = "姓名")
     private String name;
     @DateTimeFormat(pattern = "yyyy-MM-dd")
-    @ExcelAnnotation(headName="生日",order=2,type = ExcelAnnotation.DataType.Date,datePattern = "yyyy-MM-dd")
+    @ExcelFild(Field = "生日")
     private Date birthday;
-  @ExcelAnnotation(headName="收获地址",order=3)
+    @ExcelFild(Field="收获地址")
     private String address;//收获地址
-  @ExcelAnnotation(headName="是否删除",order=4)
+  @ExcelFild(Field = "是否删除")
+  @TableField("xueli")
     private Integer isdel;//是否删除
-  @ExcelAnnotation(headName="IP",order=5)
-  private String ips;//
+  @ExcelFild(Field = "IP")
+  @TableField("ipaddr")
+   private String ips;//
 
   public String getIps() {
     return ips;

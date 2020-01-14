@@ -1,13 +1,15 @@
 package com.fh.poi;
 
 import org.apache.poi.ss.usermodel.*;
-import org.apache.poi.xssf.usermodel.XSSFCellStyle;
-import org.apache.poi.xssf.usermodel.XSSFSheet;
-import org.apache.poi.xssf.usermodel.XSSFWorkbook;
+import org.apache.poi.xssf.usermodel.*;
 
+import javax.servlet.ServletOutputStream;
+import javax.servlet.http.HttpServletResponse;
+import java.io.IOException;
 import java.io.OutputStream;
 import java.lang.reflect.Field;
 import java.lang.reflect.InvocationTargetException;
+import java.text.SimpleDateFormat;
 import java.util.*;
 
 public class ExcelUtils {
@@ -28,95 +30,104 @@ public class ExcelUtils {
     }
 
 
+    public static void excel(List list, HttpServletResponse response) {
+        //处理标题
+        Object o = list.get(0);//得到要下载的对象
+        Class oclass = o.getClass();//得到类的类对象
+        //获取标题名   标题名在注解上
+        ExcleHeard annotation = (ExcleHeard) oclass.getAnnotation(ExcleHeard.class);
+        String title = annotation.title();//获取标题名
+        XSSFWorkbook book= new XSSFWorkbook();
+        XSSFSheet sheet = book.createSheet(title);
+        XSSFRow row = sheet.createRow(0);
+        //处理列头
 
-    /**
-     * excel的导出
-     * @param out
-     * @param infos
-     */
-    public void exportExcel (OutputStream out, List<?> infos) {
-        try {
-            XSSFWorkbook xssfWorkbook = new XSSFWorkbook();
-            XSSFSheet sheet = xssfWorkbook.createSheet();
-            sheet.createRow(0);
+        //得到类的所有属性
+        Field[] declaredFields = oclass.getDeclaredFields();
+        int cellNum=0;
+        for (int i = 0; i <declaredFields.length ; i++) {
+            //具体的每一个属性
+            Field field=declaredFields[i];
+            //判断此属性 是否为要导出的属性
+            ExcelFild annotation1 = field.getAnnotation(ExcelFild.class);
+            if(annotation1!=null){
+                String rowName = annotation1.Field();
+                //将列名 放入具体的列中
+                XSSFCell cell = row.createCell(cellNum);
+                cell.setCellValue(rowName);
+                cellNum++;
+            }
+        }
+        //处理数据
 
-            Map<Field,Integer> map = new LinkedHashMap<>();
-            for (Object o : infos ) {
-                Field[] fields = o.getClass().getDeclaredFields();
-                for (Field field : fields) {
-                    if (field.isAnnotationPresent(ExcelAnnotation.class)) {
-                        ExcelAnnotation annotation = field.getAnnotation(ExcelAnnotation.class);
-                        map.put(field, annotation.order());
+        for (int i = 0; i <list.size() ; i++) {
+            // 获取具体的数据
+            Object o1 = list.get(i);
+            //创建行  为啥是i+1
+            XSSFRow row1 = sheet.createRow(i + 1);
+
+            int celln=0;
+            for (int j = 0; j <declaredFields.length ; j++) {
+                //具体的每一个属性
+                Field field=declaredFields[j];
+                boolean annotationPresent = field.isAnnotationPresent(ExcelFild.class);
+                if(annotationPresent==true){
+                    XSSFCell cell = row1.createCell(celln);
+                    //获取属性的值  在反射中  对类对象来说
+                    XSSFCellStyle cellStyle = book.createCellStyle();
+                    // 居中
+                    cellStyle.setAlignment(HorizontalAlignment.CENTER);
+                    cellStyle.setVerticalAlignment(VerticalAlignment.CENTER);
+                    // 四个边框
+                    cellStyle.setBorderBottom(BorderStyle.THIN);
+                    cellStyle.setBorderLeft(BorderStyle.THIN);
+                    cellStyle.setBorderRight(BorderStyle.THIN);
+                    cellStyle.setBorderTop(BorderStyle.THIN);
+                    cell.setCellStyle(cellStyle);
+                    try {
+                        field.setAccessible(true);//暴力访问  私有的属性
+                        Object o2 = field.get(o1);
+                        if(o2!=null){
+                            //判断属性的类型
+                            Class type = field.getType();
+                            if(type== Date.class){
+                                //格式化日期
+                                SimpleDateFormat sdf=new SimpleDateFormat("yyyy-MM-dd");
+                                Date da= (Date) o2;
+                                String format = sdf.format(da);
+                                cell.setCellValue(format);
+                            }else{
+                                cell.setCellValue(o2.toString());
+                            }
+                        }else {
+                            cell.setCellValue("");
+                        }
+                    } catch (IllegalAccessException e) {
+                        e.printStackTrace();
                     }
+                    celln++;
                 }
             }
-            List<Map.Entry<Field,Integer>> list = new ArrayList<Map.Entry<Field,Integer>>(map.entrySet());
-            Collections.sort(list, (o1, o2) -> o1.getValue().compareTo(o2.getValue()));
+        }
 
-            List<Field> excelFields = new ArrayList<>();
-            for(Map.Entry<Field,Integer> map1 : list){
-                excelFields.add(map1.getKey());
-            }
 
-            List<ExcelAnnotation> annotations = new ArrayList<>();
-            for (Field excelField : excelFields) {
-                annotations.add(excelField.getAnnotation(ExcelAnnotation.class));
-            }
-            addDataToExcel(xssfWorkbook, infos, excelFields, annotations, sheet);
-            xssfWorkbook.write(out);
-        } catch (Exception e) {
+
+
+        response.setCharacterEncoding("UTF-8");
+        response.setContentType("application/octet-stream");
+        response.addHeader("Content-Disposition", "attachment; filename=\""+ UUID.randomUUID().toString()+".xlsx\"");
+
+        ServletOutputStream outputStream = null;
+        try {
+            outputStream = response.getOutputStream();
+            book.write(outputStream);
+            outputStream.close();
+        } catch (IOException e) {
             e.printStackTrace();
         }
-    }
-    private <T> void addDataToExcel(XSSFWorkbook wb, List<T> dataset, List<Field> excelFields, List<ExcelAnnotation> attributes,
-                                    Sheet sheet){
-        XSSFCellStyle style = wb.createCellStyle();
-        // 居中
-        style.setAlignment(HorizontalAlignment.CENTER);
-        style.setVerticalAlignment(VerticalAlignment.CENTER);
 
-        // excel放入第一行列的名称
-        Row row = sheet.createRow(0);
-        for (int j = 0; j < excelFields.size(); j++) {
-            Cell cell = row.createCell(j);
-            ExcelAnnotation oneAttribute = attributes.get(j);
-            cell.setCellValue(oneAttribute.headName());
-            cell.setCellStyle(style);
-        }
-        // 添加数据到excel
-        for(int i=0;i<dataset.size();i++) {
-            // 数据行号从1开始,因为第0行放的是列的名称
-            row = sheet.createRow(i + 1);
-            for (int j = 0; j < attributes.size(); j++) {
-                Cell cell = row.createCell(j);
-                ExcelAnnotation annotation = attributes.get(j);
-                style = wb.createCellStyle();
-                // 居中
-                style.setAlignment(HorizontalAlignment.CENTER);
-                style.setVerticalAlignment(VerticalAlignment.CENTER);
-                // 四个边框
-                style.setBorderBottom(BorderStyle.THIN);
-                style.setBorderLeft(BorderStyle.THIN);
-                style.setBorderRight(BorderStyle.THIN);
-                style.setBorderTop(BorderStyle.THIN);
-                cell.setCellStyle(style);
-                //数据准被好了
-
-
-                // 根据属性名获取属性值
-         /*       String cellValue = BeanUtils.getProperty( dataset.get(i), excelFields.get(j).getName());
-                if (DataType.Date.equals(annotation.type())){
-                    String date = DateTimeUtil
-                            .getFormatDateFromGLWZString(cellValue, annotation.datePattern());
-                    cell.setCellValue(date);
-                }else {
-                    cell.setCellValue(cellValue);
-            }*/
-            }
-        }
 
     }
-
 
 
 
